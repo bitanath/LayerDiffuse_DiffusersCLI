@@ -14,17 +14,17 @@ from lib_layerdiffuse.utils import download_model
 
 sdxl_name = 'SG161222/RealVisXL_V4.0'
 tokenizer = CLIPTokenizer.from_pretrained(
-    sdxl_name, subfolder="tokenizer")
+    sdxl_name, subfolder="tokenizer").cuda()
 tokenizer_2 = CLIPTokenizer.from_pretrained(
-    sdxl_name, subfolder="tokenizer_2")
+    sdxl_name, subfolder="tokenizer_2").cuda()
 text_encoder = CLIPTextModel.from_pretrained(
-    sdxl_name, subfolder="text_encoder", torch_dtype=torch.float16, variant="fp16")
+    sdxl_name, subfolder="text_encoder", torch_dtype=torch.float16, variant="fp16").cuda()
 text_encoder_2 = CLIPTextModel.from_pretrained(
-    sdxl_name, subfolder="text_encoder_2", torch_dtype=torch.float16, variant="fp16")
+    sdxl_name, subfolder="text_encoder_2", torch_dtype=torch.float16, variant="fp16").cuda()
 vae = AutoencoderKL.from_pretrained(
-    sdxl_name, subfolder="vae", torch_dtype=torch.bfloat16, variant="fp16")  # bfloat16 vae
+    sdxl_name, subfolder="vae", torch_dtype=torch.bfloat16, variant="fp16").cuda()  # bfloat16 vae
 unet = UNet2DConditionModel.from_pretrained(
-    sdxl_name, subfolder="unet", torch_dtype=torch.float16, variant="fp16")
+    sdxl_name, subfolder="unet", torch_dtype=torch.float16, variant="fp16").cuda()
 
 default_negative = 'face asymmetry, eyes asymmetry, deformed eyes, open mouth, nsfw'
 
@@ -88,14 +88,14 @@ for k in sd_origin.keys():
         sd_merged[k] = sd_origin[k]
 
 print("Setting UNet in Cuda")
-unet.cuda()
+# unet.cuda()
 
 unet.load_state_dict(sd_merged, strict=True)
 del sd_offset, sd_origin, sd_merged, keys, k
 
 
-transparent_encoder = TransparentVAEEncoder(path_ld_diffusers_sdxl_vae_transparent_encoder).cuda()
-transparent_decoder = TransparentVAEDecoder(path_ld_diffusers_sdxl_vae_transparent_decoder).cuda()
+transparent_encoder = TransparentVAEEncoder(path_ld_diffusers_sdxl_vae_transparent_encoder)
+transparent_decoder = TransparentVAEDecoder(path_ld_diffusers_sdxl_vae_transparent_decoder)
 
 # Pipelines
 
