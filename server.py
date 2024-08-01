@@ -4,6 +4,9 @@ import torch
 import safetensors.torch as sf
 import subprocess
 
+from io import BytesIO
+import base64
+
 from functions import print_memory,clear_cache_print_memory,clear_cache,pytorch2numpy,numpy2pytorch,resize_without_crop
 from chat import interrogate_type,interrogate_good,interrogate_bad,interrogate_spelling_grammar,interrogate_colors,interrogate_complementary,interrogate_add_item,interrogate_canva_add
 
@@ -155,7 +158,22 @@ def pinging():
 
 @app.route('/', methods=['GET'])
 def index():
-    return 'index'
+    b64 = request.args.get("base64")
+    if(b64):
+        im = Image.open(BytesIO(base64.b64decode(b64)))
+        msgs = [{'role': 'user', 'content': "How would you describe this image? Be as verbose as possible."}]
+        default_params = {"stream": False, "sampling": False, "num_beams":3, "repetition_penalty": 1.2, "max_new_tokens": 128}
+        res = chatgpt_model.chat(
+            image=im,
+            msgs=msgs,
+            tokenizer=chatgpt_tokenizer,
+            **default_params
+        )
+
+        clear_cache_print_memory()
+        return res
+    else:
+        return "No image"
 
 @app.route('/metadata', methods=['POST'])
 def json_example():
