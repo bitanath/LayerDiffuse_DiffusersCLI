@@ -96,6 +96,10 @@ pipeline = KDiffusionStableDiffusionXLPipeline(
 )
 
 
+def print_memory():
+    result = subprocess.run(['nvidia-smi', '--query-gpu=memory.total,memory.free', '--format=csv'], stdout=subprocess.PIPE)
+    print(result.stdout)
+
 @torch.inference_mode()
 def pytorch2numpy(imgs):
     results = []
@@ -122,8 +126,7 @@ def resize_without_crop(image, target_width, target_height):
 prompt = sys.argv[1]
 print("Now inferring with prompt ",prompt)
 
-result = subprocess.run(['nvidia-smi', '--query-gpu=memory.total,memory.free', '--format=csv'], stdout=subprocess.PIPE)
-print(result.stdout)
+print_memory()
 
 with torch.inference_mode():
     guidance_scale = 7.0
@@ -166,8 +169,7 @@ with torch.inference_mode():
     for i, image in enumerate(vis_list):
         Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_visualization.png', format='PNG')
 
-    result = subprocess.run(['nvidia-smi', '--query-gpu=memory.total,memory.free', '--format=csv'], stdout=subprocess.PIPE)
-    print(result.stdout)
+    print_memory()
 
     print("Now regenerating the image without specifying cuda")
 
@@ -209,10 +211,11 @@ with torch.inference_mode():
         **default_params
     )
 
+    print_memory()
+
     print(res)
 
     msgs = [{'role': 'user', 'content': "Hey how are you doing, I want you to act as a storyteller",'role': 'assistant', 'content': "Sure I can do that.",'role': 'user', 'content': "Write a short story with respect to the image"}]
-    default_params = {"stream": False, "sampling": False, "num_beams":3, "repetition_penalty": 1.2, "max_new_tokens": 1024}
     res = chatgpt_model.chat(
         image=Image.fromarray(image),
         msgs=msgs,
@@ -222,3 +225,4 @@ with torch.inference_mode():
 
     print(res)
     
+    print_memory()
