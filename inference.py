@@ -100,6 +100,12 @@ def print_memory():
     result = subprocess.run(['nvidia-smi', '--query-gpu=memory.total,memory.free', '--format=csv'], stdout=subprocess.PIPE)
     print(result.stdout)
 
+def clear_cache_print_memory():
+    with torch.no_grad():
+        torch.cuda.empty_cache()
+    result = subprocess.run(['nvidia-smi', '--query-gpu=memory.total,memory.free', '--format=csv'], stdout=subprocess.PIPE)
+    print(result.stdout)
+
 @torch.inference_mode()
 def pytorch2numpy(imgs):
     results = []
@@ -126,7 +132,7 @@ def resize_without_crop(image, target_width, target_height):
 prompt = sys.argv[1]
 print("Now inferring with prompt ",prompt)
 
-print_memory()
+clear_cache_print_memory()
 
 with torch.inference_mode():
     guidance_scale = 7.0
@@ -169,7 +175,7 @@ with torch.inference_mode():
     for i, image in enumerate(vis_list):
         Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_visualization.png', format='PNG')
 
-    print_memory()
+    clear_cache_print_memory()
 
     print("Now regenerating the image without specifying cuda")
 
@@ -211,7 +217,7 @@ with torch.inference_mode():
         **default_params
     )
 
-    print_memory()
+    clear_cache_print_memory()
 
     print(res)
 
@@ -225,4 +231,4 @@ with torch.inference_mode():
 
     print(res)
     
-    print_memory()
+    clear_cache_print_memory()
