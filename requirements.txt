@@ -9,5 +9,6 @@ tensorboardX
 safetensors
 pillow
 einops
+flask
 torch
 peft
