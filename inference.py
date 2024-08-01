@@ -13,13 +13,9 @@ from lib_layerdiffuse.vae import TransparentVAEDecoder, TransparentVAEEncoder
 from lib_layerdiffuse.utils import download_model
 from modelscope import AutoModel, AutoTokenizer,snapshot_download
 
-model = AutoModel.from_pretrained('OpenBMB/MiniCPM-V-2.0', trust_remote_code=True, torch_dtype=torch.float16)
-model = model.to(device='cuda', dtype=torch.float16)
-tokenizer = AutoTokenizer.from_pretrained('OpenBMB/MiniCPM-V-2.0', trust_remote_code=True)
-model.eval()
-
 chatgpt_model_dir = snapshot_download('OpenBMB/MiniCPM-Llama3-V-2_5')
 chatgpt_model = AutoModel.from_pretrained(chatgpt_model_dir, trust_remote_code=True)
+chatgpt_model.to(device='cuda', dtype=torch.float16)
 tokenizer = AutoTokenizer.from_pretrained(chatgpt_model_dir, trust_remote_code=True)
 chatgpt_model.eval()
 
