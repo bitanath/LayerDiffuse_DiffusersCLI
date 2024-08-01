@@ -182,6 +182,7 @@ with torch.inference_mode():
         generator=rng,
         guidance_scale=guidance_scale,
     ).images
+    latents = latents.to(dtype=vae.dtype, device=vae.device) / vae.config.scaling_factor
     result_list, vis_list = transparent_decoder(vae, latents)
     for i, image in enumerate(result_list):
         Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_transparent.png', format='PNG')
