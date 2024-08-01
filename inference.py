@@ -1,7 +1,6 @@
 import sys
 import numpy as np
 import torch
-import memory_management
 import safetensors.torch as sf
 
 from PIL import Image
@@ -11,14 +10,13 @@ from diffusers.models.attention_processor import AttnProcessor2_0
 from transformers import CLIPTextModel, CLIPTokenizer
 from lib_layerdiffuse.vae import TransparentVAEDecoder, TransparentVAEEncoder
 from lib_layerdiffuse.utils import download_model
-from modelscope import AutoModel, AutoTokenizer,snapshot_download
+from transformers import AutoModel, AutoTokenizer
 
-chatgpt_model_dir = snapshot_download('OpenBMB/MiniCPM-Llama3-V-2_5')
-chatgpt_model = AutoModel.from_pretrained(chatgpt_model_dir, trust_remote_code=True)
-chatgpt_model.to(device='cuda', dtype=torch.float16)
-tokenizer = AutoTokenizer.from_pretrained(chatgpt_model_dir, trust_remote_code=True)
+model_path = 'openbmb/MiniCPM-Llama3-V-2_5'
+chatgpt_model = AutoModel.from_pretrained(model_path, trust_remote_code=True).to(dtype=torch.float16)
+chatgpt_model = chatgpt_model.to(device='cuda')
+tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 chatgpt_model.eval()
-
 
 # Load models
 
@@ -163,14 +161,44 @@ with torch.inference_mode():
     for i, image in enumerate(vis_list):
         Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_visualization.png', format='PNG')
 
-    msgs = [{'role': 'user', 'content': "What does this image contain?"}]
+    print("Now regenerating the image without specifying cuda")
 
+    positive_cond, positive_pooler = pipeline.encode_cropped_prompt_77tokens(
+        prompt
+    )
+
+    negative_cond, negative_pooler = pipeline.encode_cropped_prompt_77tokens(default_negative)
+
+    initial_latent = torch.zeros(size=(1, 4, 144, 112), dtype=unet.dtype, device=unet.device)
+    latents = pipeline(
+        initial_latent=initial_latent,
+        strength=1.0,
+        num_inference_steps=25,
+        batch_size=1,
+        prompt_embeds=positive_cond,
+        negative_prompt_embeds=negative_cond,
+        pooled_prompt_embeds=positive_pooler,
+        negative_pooled_prompt_embeds=negative_pooler,
+        generator=rng,
+        guidance_scale=guidance_scale,
+    ).images
+    result_list, vis_list = transparent_decoder(vae, latents)
+    for i, image in enumerate(result_list):
+        Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_transparent.png', format='PNG')
+
+    for i, image in enumerate(vis_list):
+        Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_visualization.png', format='PNG')
+
+
+
+    msgs = [{'role': 'user', 'content': "What does this image contain?"}]
+    default_params = {"stream": False, "sampling": False, "num_beams":3, "repetition_penalty": 1.2, "max_new_tokens": 1024}
     res = chatgpt_model.chat(
         image=Image.fromarray(image),
         msgs=msgs,
         tokenizer=tokenizer,
-        sampling=True,
-        temperature=0.7
+        **default_params
     )
+
     print(res)
     
