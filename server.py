@@ -93,8 +93,9 @@ pipeline = KDiffusionStableDiffusionXLPipeline(
     unet=unet,
     scheduler=None,  # We completely give up diffusers sampling system and use A1111's method
 )
+default_keywords=", masterpiece, best quality, absurdres"
 
-prompt = "Snake" + ", masterpiece, best quality, absurdres"
+prompt = "Snake" + default_keywords
 print("Now inferring with prompt ",prompt)
 
 clear_cache_print_memory()
@@ -180,12 +181,10 @@ def index():
     
 @app.route('/check', methods=['GET'])
 def index():
-    b64 = request.args.get("prompt")
+    prompt = request.args.get("prompt")
     if(prompt):
-        
-        positive_cond, positive_pooler = pipeline.encode_cropped_prompt_77tokens(
-        prompt
-        )
+        prompt = prompt + default_keywords
+        positive_cond, positive_pooler = pipeline.encode_cropped_prompt_77tokens(prompt)
 
         negative_cond, negative_pooler = pipeline.encode_cropped_prompt_77tokens(default_negative)
 
@@ -208,7 +207,7 @@ def index():
         for i, image in enumerate(result_list):
             img = Image.fromarray(image)
         clear_cache_print_memory()
-        return "Generated image"
+        return "Generated image"+str(img.size())
     else:
         return "No prompt"
 
