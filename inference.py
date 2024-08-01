@@ -88,15 +88,15 @@ for k in sd_origin.keys():
         sd_merged[k] = sd_origin[k]
 
 print("Setting UNet in Cuda")
-unet.to('cuda')
-sd_merged.to('cuda')
+
 
 unet.load_state_dict(sd_merged, strict=True)
+unet.to('cuda')
 del sd_offset, sd_origin, sd_merged, keys, k
 
 
-transparent_encoder = TransparentVAEEncoder(path_ld_diffusers_sdxl_vae_transparent_encoder).cuda()
-transparent_decoder = TransparentVAEDecoder(path_ld_diffusers_sdxl_vae_transparent_decoder).cuda()
+transparent_encoder = TransparentVAEEncoder(path_ld_diffusers_sdxl_vae_transparent_encoder).to('cuda')
+transparent_decoder = TransparentVAEDecoder(path_ld_diffusers_sdxl_vae_transparent_decoder).to('cuda')
 
 # Pipelines
 
