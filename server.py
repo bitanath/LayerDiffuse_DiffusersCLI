@@ -164,7 +164,7 @@ def index():
         b64 = b64.replace("data:image/png;base64,","")
         print("Got image",b64)
         im = Image.open(BytesIO(base64.b64decode(b64)))
-        msgs = [{'role': 'user', 'content': "How would you describe this image? Be as verbose as possible."}]
+        msgs = [{'role': 'user', 'content': "How would you describe this image? Be as succinct as possible."}]
         default_params = {"stream": False, "sampling": False, "num_beams":3, "repetition_penalty": 1.2, "max_new_tokens": 128}
         res = chatgpt_model.chat(
             image=im,
