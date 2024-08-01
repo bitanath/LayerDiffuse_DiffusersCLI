@@ -28,8 +28,6 @@ unet = UNet2DConditionModel.from_pretrained(
 
 default_negative = 'face asymmetry, eyes asymmetry, deformed eyes, open mouth, nsfw'
 
-unet.to('cuda')
-
 @torch.inference_mode()
 def pytorch2numpy(imgs):
     results = []
@@ -90,14 +88,15 @@ for k in sd_origin.keys():
         sd_merged[k] = sd_origin[k]
 
 print("Setting UNet in Cuda")
-# unet.cuda()
+unet.to('cuda')
+sd_merged.to('cuda')
 
 unet.load_state_dict(sd_merged, strict=True)
 del sd_offset, sd_origin, sd_merged, keys, k
 
 
-transparent_encoder = TransparentVAEEncoder(path_ld_diffusers_sdxl_vae_transparent_encoder)
-transparent_decoder = TransparentVAEDecoder(path_ld_diffusers_sdxl_vae_transparent_decoder)
+transparent_encoder = TransparentVAEEncoder(path_ld_diffusers_sdxl_vae_transparent_encoder).cuda()
+transparent_decoder = TransparentVAEDecoder(path_ld_diffusers_sdxl_vae_transparent_decoder).cuda()
 
 # Pipelines
 
@@ -117,6 +116,8 @@ prompt = sys.argv[1]
 negative=default_negative
 num_inference_steps=25
 guidance_scale=7.0
+
+print("Got prompt",prompt)
 # def infer(prompt,negative=default_negative,num_inference_steps=25,guidance_scale=7.0):
 with torch.inference_mode():
     torch.cuda.empty_cache()
