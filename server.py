@@ -3,6 +3,10 @@ from flask import Flask,request,make_response
 
 app = Flask(__name__)
 
+@app.route('/ping', methods=['GET'])
+def pinging():
+    return 'pong'
+
 @app.route('/json-example', methods=['POST'])
 def json_example():
     request_data = request.get_json()

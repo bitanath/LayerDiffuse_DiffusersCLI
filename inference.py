@@ -2,6 +2,7 @@ import sys
 import numpy as np
 import torch
 import safetensors.torch as sf
+import subprocess
 
 from PIL import Image
 from diffusers_kdiffusion_sdxl import KDiffusionStableDiffusionXLPipeline
@@ -120,6 +121,10 @@ def resize_without_crop(image, target_width, target_height):
 
 prompt = sys.argv[1]
 print("Now inferring with prompt ",prompt)
+
+result = subprocess.run(['nvidia-smi', '--query-gpu=memory.total,memory.free', '--format=csv'], stdout=subprocess.PIPE)
+print(result.stdout)
+
 with torch.inference_mode():
     guidance_scale = 7.0
 
