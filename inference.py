@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import torch
 import memory_management
@@ -51,12 +52,13 @@ def resize_without_crop(image, target_width, target_height):
     return np.array(resized_image)
 
 # SDP
+print("Setting attention processor")
 
 unet.set_attn_processor(AttnProcessor2_0())
 vae.set_attn_processor(AttnProcessor2_0())
 
 # Download Mode
-
+print("Checking downloads and downloading if necessary")
 path_ld_diffusers_sdxl_attn = download_model(
     url='https://huggingface.co/lllyasviel/LayerDiffuse_Diffusers/resolve/main/ld_diffusers_sdxl_attn.safetensors',
     local_path='./models/ld_diffusers_sdxl_attn.safetensors'
@@ -73,7 +75,7 @@ path_ld_diffusers_sdxl_vae_transparent_decoder = download_model(
 )
 
 # Modify
-
+print("Loading files for SD")
 sd_offset = sf.load_file(path_ld_diffusers_sdxl_attn)
 sd_origin = unet.state_dict()
 keys = sd_origin.keys()
@@ -87,7 +89,7 @@ for k in sd_origin.keys():
 
 unet.load_state_dict(sd_merged, strict=True)
 del sd_offset, sd_origin, sd_merged, keys, k
-
+print("Setting UNet in Cuda")
 unet.cuda()
 
 transparent_encoder = TransparentVAEEncoder(path_ld_diffusers_sdxl_vae_transparent_encoder).cuda()
@@ -105,37 +107,42 @@ pipeline = KDiffusionStableDiffusionXLPipeline(
     scheduler=None,  # We completely give up diffusers sampling system and use A1111's method
 )
 
+print("Created Pipeline")
 
-def infer(prompt,negative=default_negative,num_inference_steps=25,guidance_scale=7.0):
-    with torch.inference_mode():
-        torch.cuda.empty_cache()
-        positive_cond, positive_pooler = pipeline.encode_cropped_prompt_77tokens(
-            prompt
-        )
+prompt = sys.argv[1]
+negative=default_negative
+num_inference_steps=25
+guidance_scale=7.0
+# def infer(prompt,negative=default_negative,num_inference_steps=25,guidance_scale=7.0):
+with torch.inference_mode():
+    torch.cuda.empty_cache()
+    positive_cond, positive_pooler = pipeline.encode_cropped_prompt_77tokens(
+        prompt
+    )
 
-        rng = torch.Generator(device='cuda').manual_seed(12345)
+    rng = torch.Generator(device='cuda').manual_seed(12345)
 
-        negative_cond, negative_pooler = pipeline.encode_cropped_prompt_77tokens(negative)
+    negative_cond, negative_pooler = pipeline.encode_cropped_prompt_77tokens(negative)
 
-        initial_latent = torch.zeros(size=(1, 4, 144, 112), dtype=unet.dtype, device=unet.device)
-        latents = pipeline(
-            initial_latent=initial_latent,
-            strength=1.0,
-            num_inference_steps=num_inference_steps,
-            batch_size=1,
-            prompt_embeds=positive_cond,
-            negative_prompt_embeds=negative_cond,
-            pooled_prompt_embeds=positive_pooler,
-            negative_pooled_prompt_embeds=negative_pooler,
-            generator=rng,
-            guidance_scale=guidance_scale,
-        ).images
-        
-        latents = latents.to(dtype=vae.dtype, device=vae.device) / vae.config.scaling_factor
-        result_list, vis_list = transparent_decoder(vae, latents)
+    initial_latent = torch.zeros(size=(1, 4, 144, 112), dtype=unet.dtype, device=unet.device)
+    latents = pipeline(
+        initial_latent=initial_latent,
+        strength=1.0,
+        num_inference_steps=num_inference_steps,
+        batch_size=1,
+        prompt_embeds=positive_cond,
+        negative_prompt_embeds=negative_cond,
+        pooled_prompt_embeds=positive_pooler,
+        negative_pooled_prompt_embeds=negative_pooler,
+        generator=rng,
+        guidance_scale=guidance_scale,
+    ).images
+    
+    latents = latents.to(dtype=vae.dtype, device=vae.device) / vae.config.scaling_factor
+    result_list, vis_list = transparent_decoder(vae, latents)
 
-        for i, image in enumerate(result_list):
-            Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_transparent.png', format='PNG')
+    for i, image in enumerate(result_list):
+        Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_transparent.png', format='PNG')
 
-        for i, image in enumerate(vis_list):
-            Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_visualization.png', format='PNG')
+    for i, image in enumerate(vis_list):
+        Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_visualization.png', format='PNG')
