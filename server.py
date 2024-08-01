@@ -203,7 +203,6 @@ def check():
         ).images
         latents = latents.to(dtype=vae.dtype, device=vae.device) / vae.config.scaling_factor
         result_list, vis_list = transparent_decoder(vae, latents)
-        img
         for i, image in enumerate(result_list):
             img = Image.fromarray(image)
         clear_cache_print_memory()
