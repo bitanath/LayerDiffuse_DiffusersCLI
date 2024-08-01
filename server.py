@@ -206,7 +206,7 @@ def check():
         for i, image in enumerate(result_list):
             img = Image.fromarray(image)
         clear_cache_print_memory()
-        return "Generated image"+str(img.size())
+        return "Generated image"+str(img.size)
     else:
         return "No prompt"
 
