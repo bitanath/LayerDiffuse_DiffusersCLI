@@ -94,9 +94,12 @@ unet.load_state_dict(sd_merged, strict=True)
 unet.to('cuda')
 del sd_offset, sd_origin, sd_merged, keys, k
 
+vae.to('cuda')
 
 transparent_encoder = TransparentVAEEncoder(path_ld_diffusers_sdxl_vae_transparent_encoder).to('cuda')
 transparent_decoder = TransparentVAEDecoder(path_ld_diffusers_sdxl_vae_transparent_decoder).to('cuda')
+
+print("Set everything in GPU memory")
 
 # Pipelines
 
@@ -120,7 +123,7 @@ guidance_scale=7.0
 print("Got prompt",prompt)
 # def infer(prompt,negative=default_negative,num_inference_steps=25,guidance_scale=7.0):
 with torch.inference_mode():
-    torch.cuda.empty_cache()
+    # torch.cuda.empty_cache()
     positive_cond, positive_pooler = pipeline.encode_cropped_prompt_77tokens(
         prompt
     )
