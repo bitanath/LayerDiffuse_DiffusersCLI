@@ -120,7 +120,7 @@ negative=default_negative
 num_inference_steps=25
 guidance_scale=7.0
 
-pipeline.device
+pipeline.to('cuda')
 
 print("Got prompt",prompt,pipeline.device)
 # def infer(prompt,negative=default_negative,num_inference_steps=25,guidance_scale=7.0):
@@ -130,11 +130,17 @@ with torch.inference_mode():
         prompt
     )
 
+    print("Now generating random number")
+
     rng = torch.Generator(device='cuda').manual_seed(12345)
+
+    print("Now encoding prompt")
 
     negative_cond, negative_pooler = pipeline.encode_cropped_prompt_77tokens(negative)
 
     initial_latent = torch.zeros(size=(1, 4, 144, 112), dtype=unet.dtype, device=unet.device)
+
+    print("Got initial latent ")
     latents = pipeline(
         initial_latent=initial_latent,
         strength=1.0,
