@@ -1,7 +1,3 @@
-import os
-
-os.environ['HF_HOME'] = 'D:/hf_home'
-
 import numpy as np
 import torch
 import memory_management
@@ -14,9 +10,6 @@ from diffusers.models.attention_processor import AttnProcessor2_0
 from transformers import CLIPTextModel, CLIPTokenizer
 from lib_layerdiffuse.vae import TransparentVAEDecoder, TransparentVAEEncoder
 from lib_layerdiffuse.utils import download_model
-
-
-# Load models
 
 sdxl_name = 'SG161222/RealVisXL_V4.0'
 tokenizer = CLIPTokenizer.from_pretrained(
@@ -32,12 +25,30 @@ vae = AutoencoderKL.from_pretrained(
 unet = UNet2DConditionModel.from_pretrained(
     sdxl_name, subfolder="unet", torch_dtype=torch.float16, variant="fp16")
 
-# This negative prompt is suggested by RealVisXL_V4 author
-# See also https://huggingface.co/SG161222/RealVisXL_V4.0
-# Note that in A111's normalization, a full "(full sentence)" is equal to "full sentence"
-# so we can just remove SG161222's braces
-
 default_negative = 'face asymmetry, eyes asymmetry, deformed eyes, open mouth, nsfw'
+
+@torch.inference_mode()
+def pytorch2numpy(imgs):
+    results = []
+    for x in imgs:
+        y = x.movedim(0, -1)
+        y = y * 127.5 + 127.5
+        y = y.detach().float().cpu().numpy().clip(0, 255).astype(np.uint8)
+        results.append(y)
+    return results
+
+
+@torch.inference_mode()
+def numpy2pytorch(imgs):
+    h = torch.from_numpy(np.stack(imgs, axis=0)).float() / 127.5 - 1.0
+    h = h.movedim(-1, 1)
+    return h
+
+
+def resize_without_crop(image, target_width, target_height):
+    pil_image = Image.fromarray(image)
+    resized_image = pil_image.resize((target_width, target_height), Image.LANCZOS)
+    return np.array(resized_image)
 
 # SDP
 
@@ -93,64 +104,39 @@ pipeline = KDiffusionStableDiffusionXLPipeline(
 )
 
 
-@torch.inference_mode()
-def pytorch2numpy(imgs):
-    results = []
-    for x in imgs:
-        y = x.movedim(0, -1)
-        y = y * 127.5 + 127.5
-        y = y.detach().float().cpu().numpy().clip(0, 255).astype(np.uint8)
-        results.append(y)
-    return results
+memory_management.load_models_to_gpu([text_encoder, text_encoder_2])
+memory_management.load_models_to_gpu([unet])
+memory_management.load_models_to_gpu([vae, transparent_decoder, transparent_encoder])
 
+def infer(prompt,negative=default_negative,num_inference_steps=25,guidance_scale=7.0):
+    with torch.inference_mode():
+        positive_cond, positive_pooler = pipeline.encode_cropped_prompt_77tokens(
+            prompt
+        )
 
-@torch.inference_mode()
-def numpy2pytorch(imgs):
-    h = torch.from_numpy(np.stack(imgs, axis=0)).float() / 127.5 - 1.0
-    h = h.movedim(-1, 1)
-    return h
+        rng = torch.Generator(device=memory_management.gpu).manual_seed(12345)
 
+        negative_cond, negative_pooler = pipeline.encode_cropped_prompt_77tokens(negative)
 
-def resize_without_crop(image, target_width, target_height):
-    pil_image = Image.fromarray(image)
-    resized_image = pil_image.resize((target_width, target_height), Image.LANCZOS)
-    return np.array(resized_image)
+        initial_latent = torch.zeros(size=(1, 4, 144, 112), dtype=unet.dtype, device=unet.device)
+        latents = pipeline(
+            initial_latent=initial_latent,
+            strength=1.0,
+            num_inference_steps=num_inference_steps,
+            batch_size=1,
+            prompt_embeds=positive_cond,
+            negative_prompt_embeds=negative_cond,
+            pooled_prompt_embeds=positive_pooler,
+            negative_pooled_prompt_embeds=negative_pooler,
+            generator=rng,
+            guidance_scale=guidance_scale,
+        ).images
+        
+        latents = latents.to(dtype=vae.dtype, device=vae.device) / vae.config.scaling_factor
+        result_list, vis_list = transparent_decoder(vae, latents)
 
+        for i, image in enumerate(result_list):
+            Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_transparent.png', format='PNG')
 
-with torch.inference_mode():
-    guidance_scale = 7.0
-
-    rng = torch.Generator(device=memory_management.gpu).manual_seed(12345)
-
-    memory_management.load_models_to_gpu([text_encoder, text_encoder_2])
-
-    positive_cond, positive_pooler = pipeline.encode_cropped_prompt_77tokens(
-        'glass bottle, high quality'
-    )
-
-    negative_cond, negative_pooler = pipeline.encode_cropped_prompt_77tokens(default_negative)
-
-    memory_management.load_models_to_gpu([unet])
-    initial_latent = torch.zeros(size=(1, 4, 144, 112), dtype=unet.dtype, device=unet.device)
-    latents = pipeline(
-        initial_latent=initial_latent,
-        strength=1.0,
-        num_inference_steps=25,
-        batch_size=1,
-        prompt_embeds=positive_cond,
-        negative_prompt_embeds=negative_cond,
-        pooled_prompt_embeds=positive_pooler,
-        negative_pooled_prompt_embeds=negative_pooler,
-        generator=rng,
-        guidance_scale=guidance_scale,
-    ).images
-
-    memory_management.load_models_to_gpu([vae, transparent_decoder, transparent_encoder])
-    latents = latents.to(dtype=vae.dtype, device=vae.device) / vae.config.scaling_factor
-    result_list, vis_list = transparent_decoder(vae, latents)
-
-    for i, image in enumerate(result_list):
-        Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_transparent.png', format='PNG')
-
-    for i, image in enumerate(vis_list):
-        Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_visualization.png', format='PNG')
+        for i, image in enumerate(vis_list):
+            Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_visualization.png', format='PNG')
