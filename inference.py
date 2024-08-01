@@ -5,6 +5,7 @@ import safetensors.torch as sf
 import subprocess
 
 from functions import print_memory,clear_cache_print_memory,clear_cache,pytorch2numpy,numpy2pytorch,resize_without_crop
+from heatmap import heatmap
 
 from PIL import Image
 from diffusers_kdiffusion_sdxl import KDiffusionStableDiffusionXLPipeline
@@ -171,9 +172,12 @@ with torch.inference_mode():
     for i, image in enumerate(result_list):
         Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_transparent.png', format='PNG')
 
+    print("Now generating heatmap from image")
+    heatmapped = heatmap(Image.fromarray(image))
+    heatmapped.save(f'./imgs/outputs/t2i_{i}_heatmap.png', format='PNG')
+
     for i, image in enumerate(vis_list):
         Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_visualization.png', format='PNG')
-
 
 
     msgs = [{'role': 'user', 'content': "What does this image contain?"}]

@@ -130,12 +130,21 @@ with torch.inference_mode():
     result_list, vis_list = transparent_decoder(vae, latents)
 
     for i, image in enumerate(result_list):
-        Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_transparent.png', format='PNG')
-
-    for i, image in enumerate(vis_list):
-        Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_visualization.png', format='PNG')
+        print("Warmed up generator: ",Image.fromarray(image))
 
     clear_cache_print_memory()
+
+    msgs = [{'role': 'user', 'content': "What does this image contain?"}]
+    default_params = {"stream": False, "sampling": False, "num_beams":3, "repetition_penalty": 1.2, "max_new_tokens": 1024}
+    res = chatgpt_model.chat(
+        image=Image.fromarray(image),
+        msgs=msgs,
+        tokenizer=chatgpt_tokenizer,
+        **default_params
+    )
+
+    clear_cache_print_memory()
+    print("Warmed up chatter: ",Image.fromarray(image))
 
 
 @app.route('/ping', methods=['GET'])
@@ -144,8 +153,7 @@ def pinging():
 
 @app.route('/metadata', methods=['POST'])
 def json_example():
-    request_data = request.get_json()
-
+    request_data = request.get_json() #get the thumbnail image of the design here
     print(request.headers)
 
     #return a dict to return a JSON by default
