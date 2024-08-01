@@ -12,6 +12,9 @@ from transformers import CLIPTextModel, CLIPTokenizer
 from lib_layerdiffuse.vae import TransparentVAEDecoder, TransparentVAEEncoder
 from lib_layerdiffuse.utils import download_model
 
+
+# Load models
+
 sdxl_name = 'SG161222/RealVisXL_V4.0'
 tokenizer = CLIPTokenizer.from_pretrained(
     sdxl_name, subfolder="tokenizer")
@@ -26,7 +29,66 @@ vae = AutoencoderKL.from_pretrained(
 unet = UNet2DConditionModel.from_pretrained(
     sdxl_name, subfolder="unet", torch_dtype=torch.float16, variant="fp16")
 
+# This negative prompt is suggested by RealVisXL_V4 author
+# See also https://huggingface.co/SG161222/RealVisXL_V4.0
+# Note that in A111's normalization, a full "(full sentence)" is equal to "full sentence"
+# so we can just remove SG161222's braces
+
 default_negative = 'face asymmetry, eyes asymmetry, deformed eyes, open mouth, nsfw'
+
+# SDP
+
+unet.set_attn_processor(AttnProcessor2_0())
+vae.set_attn_processor(AttnProcessor2_0())
+
+# Download Mode
+
+path_ld_diffusers_sdxl_attn = download_model(
+    url='https://huggingface.co/lllyasviel/LayerDiffuse_Diffusers/resolve/main/ld_diffusers_sdxl_attn.safetensors',
+    local_path='./models/ld_diffusers_sdxl_attn.safetensors'
+)
+
+path_ld_diffusers_sdxl_vae_transparent_encoder = download_model(
+    url='https://huggingface.co/lllyasviel/LayerDiffuse_Diffusers/resolve/main/ld_diffusers_sdxl_vae_transparent_encoder.safetensors',
+    local_path='./models/ld_diffusers_sdxl_vae_transparent_encoder.safetensors'
+)
+
+path_ld_diffusers_sdxl_vae_transparent_decoder = download_model(
+    url='https://huggingface.co/lllyasviel/LayerDiffuse_Diffusers/resolve/main/ld_diffusers_sdxl_vae_transparent_decoder.safetensors',
+    local_path='./models/ld_diffusers_sdxl_vae_transparent_decoder.safetensors'
+)
+
+# Modify
+
+sd_offset = sf.load_file(path_ld_diffusers_sdxl_attn)
+sd_origin = unet.state_dict()
+keys = sd_origin.keys()
+sd_merged = {}
+
+for k in sd_origin.keys():
+    if k in sd_offset:
+        sd_merged[k] = sd_origin[k] + sd_offset[k]
+    else:
+        sd_merged[k] = sd_origin[k]
+
+unet.load_state_dict(sd_merged, strict=True)
+del sd_offset, sd_origin, sd_merged, keys, k
+
+transparent_encoder = TransparentVAEEncoder(path_ld_diffusers_sdxl_vae_transparent_encoder)
+transparent_decoder = TransparentVAEDecoder(path_ld_diffusers_sdxl_vae_transparent_decoder)
+
+# Pipelines
+
+pipeline = KDiffusionStableDiffusionXLPipeline(
+    vae=vae,
+    text_encoder=text_encoder,
+    tokenizer=tokenizer,
+    text_encoder_2=text_encoder_2,
+    tokenizer_2=tokenizer_2,
+    unet=unet,
+    scheduler=None,  # We completely give up diffusers sampling system and use A1111's method
+)
+
 
 @torch.inference_mode()
 def pytorch2numpy(imgs):
@@ -51,100 +113,28 @@ def resize_without_crop(image, target_width, target_height):
     resized_image = pil_image.resize((target_width, target_height), Image.LANCZOS)
     return np.array(resized_image)
 
-# SDP
-print("Setting attention processor")
-
-unet.set_attn_processor(AttnProcessor2_0())
-vae.set_attn_processor(AttnProcessor2_0())
-
-# Download Mode
-print("Checking downloads and downloading if necessary")
-path_ld_diffusers_sdxl_attn = download_model(
-    url='https://huggingface.co/lllyasviel/LayerDiffuse_Diffusers/resolve/main/ld_diffusers_sdxl_attn.safetensors',
-    local_path='./models/ld_diffusers_sdxl_attn.safetensors'
-)
-
-path_ld_diffusers_sdxl_vae_transparent_encoder = download_model(
-    url='https://huggingface.co/lllyasviel/LayerDiffuse_Diffusers/resolve/main/ld_diffusers_sdxl_vae_transparent_encoder.safetensors',
-    local_path='./models/ld_diffusers_sdxl_vae_transparent_encoder.safetensors'
-)
-
-path_ld_diffusers_sdxl_vae_transparent_decoder = download_model(
-    url='https://huggingface.co/lllyasviel/LayerDiffuse_Diffusers/resolve/main/ld_diffusers_sdxl_vae_transparent_decoder.safetensors',
-    local_path='./models/ld_diffusers_sdxl_vae_transparent_decoder.safetensors'
-)
-
-# Modify
-print("Loading files for SD")
-sd_offset = sf.load_file(path_ld_diffusers_sdxl_attn)
-sd_origin = unet.state_dict()
-keys = sd_origin.keys()
-sd_merged = {}
-
-for k in sd_origin.keys():
-    if k in sd_offset:
-        sd_merged[k] = sd_origin[k] + sd_offset[k]
-    else:
-        sd_merged[k] = sd_origin[k]
-
-print("Setting UNet in Cuda")
-
-
-unet.load_state_dict(sd_merged, strict=True)
-unet.to('cuda')
-del sd_offset, sd_origin, sd_merged, keys, k
-
-vae.to('cuda')
-
-transparent_encoder = TransparentVAEEncoder(path_ld_diffusers_sdxl_vae_transparent_encoder).to('cuda')
-transparent_decoder = TransparentVAEDecoder(path_ld_diffusers_sdxl_vae_transparent_decoder).to('cuda')
-
-print("Set everything in GPU memory")
-
-# Pipelines
-
-pipeline = KDiffusionStableDiffusionXLPipeline(
-    vae=vae,
-    text_encoder=text_encoder,
-    tokenizer=tokenizer,
-    text_encoder_2=text_encoder_2,
-    tokenizer_2=tokenizer_2,
-    unet=unet,
-    scheduler=None,  # We completely give up diffusers sampling system and use A1111's method
-)
-
-print("Created Pipeline")
-
 prompt = sys.argv[1]
-negative=default_negative
-num_inference_steps=25
-guidance_scale=7.0
 
-pipeline.to('cuda')
-
-print("Got prompt",prompt,pipeline.device, unet.device, vae.device)
-# def infer(prompt,negative=default_negative,num_inference_steps=25,guidance_scale=7.0):
 with torch.inference_mode():
-    # torch.cuda.empty_cache()
+    guidance_scale = 7.0
+
+    rng = torch.Generator(device='cuda').manual_seed(12345)
+
+    text_encoder.to('cuda')
+    text_encoder_2.to('cuda')
+
     positive_cond, positive_pooler = pipeline.encode_cropped_prompt_77tokens(
         prompt
     )
 
-    print("Now generating random number")
+    negative_cond, negative_pooler = pipeline.encode_cropped_prompt_77tokens(default_negative)
 
-    rng = torch.Generator(device='cuda').manual_seed(12345)
-
-    print("Now encoding prompt")
-
-    negative_cond, negative_pooler = pipeline.encode_cropped_prompt_77tokens(negative)
-
+    unet.to('cuda')
     initial_latent = torch.zeros(size=(1, 4, 144, 112), dtype=unet.dtype, device=unet.device)
-
-    print("Got initial latent ")
     latents = pipeline(
         initial_latent=initial_latent,
         strength=1.0,
-        num_inference_steps=num_inference_steps,
+        num_inference_steps=25,
         batch_size=1,
         prompt_embeds=positive_cond,
         negative_prompt_embeds=negative_cond,
@@ -153,7 +143,10 @@ with torch.inference_mode():
         generator=rng,
         guidance_scale=guidance_scale,
     ).images
-    
+
+    vae.to('cuda')
+    transparent_decoder.to('cuda')
+    transparent_encoder.to('cuda')
     latents = latents.to(dtype=vae.dtype, device=vae.device) / vae.config.scaling_factor
     result_list, vis_list = transparent_decoder(vae, latents)
 
