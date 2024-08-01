@@ -90,7 +90,7 @@ pipeline = KDiffusionStableDiffusionXLPipeline(
     scheduler=None,  # We completely give up diffusers sampling system and use A1111's method
 )
 
-prompt = sys.argv[1] + ", masterpiece, best quality, absurdres"
+prompt = "Snake" + ", masterpiece, best quality, absurdres"
 print("Now inferring with prompt ",prompt)
 
 clear_cache_print_memory()
@@ -145,7 +145,7 @@ with torch.inference_mode():
     )
 
     clear_cache_print_memory()
-    print("Warmed up chatter: ",Image.fromarray(image))
+    print("Warmed up chatter: ",res)
 
 
 @app.route('/ping', methods=['GET'])
