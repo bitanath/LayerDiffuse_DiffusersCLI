@@ -15,7 +15,7 @@ from transformers import AutoModel, AutoTokenizer
 model_path = 'openbmb/MiniCPM-Llama3-V-2_5'
 chatgpt_model = AutoModel.from_pretrained(model_path, trust_remote_code=True).to(dtype=torch.float16)
 chatgpt_model = chatgpt_model.to(device='cuda')
-tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+chatgpt_tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 chatgpt_model.eval()
 
 # Load models
@@ -197,7 +197,7 @@ with torch.inference_mode():
     res = chatgpt_model.chat(
         image=Image.fromarray(image),
         msgs=msgs,
-        tokenizer=tokenizer,
+        tokenizer=chatgpt_tokenizer,
         **default_params
     )
 
