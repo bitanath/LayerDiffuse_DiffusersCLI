@@ -88,8 +88,10 @@ for k in sd_origin.keys():
 unet.load_state_dict(sd_merged, strict=True)
 del sd_offset, sd_origin, sd_merged, keys, k
 
-transparent_encoder = TransparentVAEEncoder(path_ld_diffusers_sdxl_vae_transparent_encoder)
-transparent_decoder = TransparentVAEDecoder(path_ld_diffusers_sdxl_vae_transparent_decoder)
+unet.cuda()
+
+transparent_encoder = TransparentVAEEncoder(path_ld_diffusers_sdxl_vae_transparent_encoder).cuda()
+transparent_decoder = TransparentVAEDecoder(path_ld_diffusers_sdxl_vae_transparent_decoder).cuda()
 
 # Pipelines
 
@@ -104,17 +106,14 @@ pipeline = KDiffusionStableDiffusionXLPipeline(
 )
 
 
-memory_management.load_models_to_gpu([text_encoder, text_encoder_2])
-memory_management.load_models_to_gpu([unet])
-memory_management.load_models_to_gpu([vae, transparent_decoder, transparent_encoder])
-
 def infer(prompt,negative=default_negative,num_inference_steps=25,guidance_scale=7.0):
     with torch.inference_mode():
+        torch.cuda.empty_cache()
         positive_cond, positive_pooler = pipeline.encode_cropped_prompt_77tokens(
             prompt
         )
 
-        rng = torch.Generator(device=memory_management.gpu).manual_seed(12345)
+        rng = torch.Generator(device='cuda').manual_seed(12345)
 
         negative_cond, negative_pooler = pipeline.encode_cropped_prompt_77tokens(negative)
 
