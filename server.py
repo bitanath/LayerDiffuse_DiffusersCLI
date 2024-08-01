@@ -171,4 +171,4 @@ def json_example():
 
 
 
-app.run(debug=True, port=8080, use_reloader=False)
+app.run(debug=True, host='localhost', port=8080, use_reloader=False)
