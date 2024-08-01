@@ -87,10 +87,12 @@ for k in sd_origin.keys():
     else:
         sd_merged[k] = sd_origin[k]
 
-unet.load_state_dict(sd_merged, strict=True)
-del sd_offset, sd_origin, sd_merged, keys, k
 print("Setting UNet in Cuda")
 unet.cuda()
+
+unet.load_state_dict(sd_merged, strict=True)
+del sd_offset, sd_origin, sd_merged, keys, k
+
 
 transparent_encoder = TransparentVAEEncoder(path_ld_diffusers_sdxl_vae_transparent_encoder).cuda()
 transparent_decoder = TransparentVAEDecoder(path_ld_diffusers_sdxl_vae_transparent_decoder).cuda()
