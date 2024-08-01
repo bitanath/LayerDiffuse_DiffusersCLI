@@ -4,6 +4,8 @@ import torch
 import safetensors.torch as sf
 import subprocess
 
+from functions import print_memory,clear_cache_print_memory,clear_cache,pytorch2numpy,numpy2pytorch,resize_without_crop
+
 from PIL import Image
 from diffusers_kdiffusion_sdxl import KDiffusionStableDiffusionXLPipeline
 from diffusers import AutoencoderKL, UNet2DConditionModel
@@ -94,40 +96,6 @@ pipeline = KDiffusionStableDiffusionXLPipeline(
     unet=unet,
     scheduler=None,  # We completely give up diffusers sampling system and use A1111's method
 )
-
-
-def print_memory():
-    result = subprocess.run(['nvidia-smi', '--query-gpu=memory.total,memory.free', '--format=csv'], stdout=subprocess.PIPE)
-    print(result.stdout)
-
-def clear_cache_print_memory():
-    with torch.no_grad():
-        torch.cuda.empty_cache()
-    result = subprocess.run(['nvidia-smi', '--query-gpu=memory.total,memory.free', '--format=csv'], stdout=subprocess.PIPE)
-    print(result.stdout)
-
-@torch.inference_mode()
-def pytorch2numpy(imgs):
-    results = []
-    for x in imgs:
-        y = x.movedim(0, -1)
-        y = y * 127.5 + 127.5
-        y = y.detach().float().cpu().numpy().clip(0, 255).astype(np.uint8)
-        results.append(y)
-    return results
-
-
-@torch.inference_mode()
-def numpy2pytorch(imgs):
-    h = torch.from_numpy(np.stack(imgs, axis=0)).float() / 127.5 - 1.0
-    h = h.movedim(-1, 1)
-    return h
-
-
-def resize_without_crop(image, target_width, target_height):
-    pil_image = Image.fromarray(image)
-    resized_image = pil_image.resize((target_width, target_height), Image.LANCZOS)
-    return np.array(resized_image)
 
 prompt = sys.argv[1] + ", masterpiece, best quality, absurdres"
 print("Now inferring with prompt ",prompt)

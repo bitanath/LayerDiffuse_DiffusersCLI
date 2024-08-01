@@ -1,41 +1,153 @@
-# GET requests will be blocked
+import sys
+import numpy as np
+import torch
+import safetensors.torch as sf
+import subprocess
+
+from functions import print_memory,clear_cache_print_memory,clear_cache,pytorch2numpy,numpy2pytorch,resize_without_crop
+
+from PIL import Image
+from diffusers_kdiffusion_sdxl import KDiffusionStableDiffusionXLPipeline
+from diffusers import AutoencoderKL, UNet2DConditionModel
+from diffusers.models.attention_processor import AttnProcessor2_0
+from transformers import CLIPTextModel, CLIPTokenizer
+from lib_layerdiffuse.vae import TransparentVAEDecoder, TransparentVAEEncoder
+from lib_layerdiffuse.utils import download_model
+from transformers import AutoModel, AutoTokenizer
 from flask import Flask,request,make_response
 
 app = Flask(__name__)
+model_path = 'openbmb/MiniCPM-Llama3-V-2_5'
+chatgpt_model = AutoModel.from_pretrained(model_path, trust_remote_code=True).to(dtype=torch.float16)
+chatgpt_model = chatgpt_model.to(device='cuda')
+chatgpt_tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+chatgpt_model.eval()
+
+sdxl_name = 'SG161222/RealVisXL_V4.0'
+tokenizer = CLIPTokenizer.from_pretrained(
+    sdxl_name, subfolder="tokenizer")
+tokenizer_2 = CLIPTokenizer.from_pretrained(
+    sdxl_name, subfolder="tokenizer_2")
+text_encoder = CLIPTextModel.from_pretrained(
+    sdxl_name, subfolder="text_encoder", torch_dtype=torch.float16, variant="fp16")
+text_encoder_2 = CLIPTextModel.from_pretrained(
+    sdxl_name, subfolder="text_encoder_2", torch_dtype=torch.float16, variant="fp16")
+vae = AutoencoderKL.from_pretrained(
+    sdxl_name, subfolder="vae", torch_dtype=torch.bfloat16, variant="fp16")  # bfloat16 vae
+unet = UNet2DConditionModel.from_pretrained(
+    sdxl_name, subfolder="unet", torch_dtype=torch.float16, variant="fp16")
+
+default_negative = 'face asymmetry, eyes asymmetry, deformed eyes, open mouth, nsfw, robot eyes, distorted, bad anatomy, medium quality, blurry, blurred, low resolution'
+
+unet.set_attn_processor(AttnProcessor2_0())
+vae.set_attn_processor(AttnProcessor2_0())
+
+# Download Mode
+
+path_ld_diffusers_sdxl_attn = download_model(
+    url='https://huggingface.co/lllyasviel/LayerDiffuse_Diffusers/resolve/main/ld_diffusers_sdxl_attn.safetensors',
+    local_path='./models/ld_diffusers_sdxl_attn.safetensors'
+)
+
+path_ld_diffusers_sdxl_vae_transparent_encoder = download_model(
+    url='https://huggingface.co/lllyasviel/LayerDiffuse_Diffusers/resolve/main/ld_diffusers_sdxl_vae_transparent_encoder.safetensors',
+    local_path='./models/ld_diffusers_sdxl_vae_transparent_encoder.safetensors'
+)
+
+path_ld_diffusers_sdxl_vae_transparent_decoder = download_model(
+    url='https://huggingface.co/lllyasviel/LayerDiffuse_Diffusers/resolve/main/ld_diffusers_sdxl_vae_transparent_decoder.safetensors',
+    local_path='./models/ld_diffusers_sdxl_vae_transparent_decoder.safetensors'
+)
+
+## Warmup the server
+print("Warming up:")
+
+sd_offset = sf.load_file(path_ld_diffusers_sdxl_attn)
+sd_origin = unet.state_dict()
+keys = sd_origin.keys()
+sd_merged = {}
+
+for k in sd_origin.keys():
+    if k in sd_offset:
+        sd_merged[k] = sd_origin[k] + sd_offset[k]
+    else:
+        sd_merged[k] = sd_origin[k]
+
+unet.load_state_dict(sd_merged, strict=True)
+del sd_offset, sd_origin, sd_merged, keys, k
+
+transparent_encoder = TransparentVAEEncoder(path_ld_diffusers_sdxl_vae_transparent_encoder)
+transparent_decoder = TransparentVAEDecoder(path_ld_diffusers_sdxl_vae_transparent_decoder)
+
+pipeline = KDiffusionStableDiffusionXLPipeline(
+    vae=vae,
+    text_encoder=text_encoder,
+    tokenizer=tokenizer,
+    text_encoder_2=text_encoder_2,
+    tokenizer_2=tokenizer_2,
+    unet=unet,
+    scheduler=None,  # We completely give up diffusers sampling system and use A1111's method
+)
+
+prompt = sys.argv[1] + ", masterpiece, best quality, absurdres"
+print("Now inferring with prompt ",prompt)
+
+clear_cache_print_memory()
+
+with torch.inference_mode():
+    guidance_scale = 7.0
+
+    rng = torch.Generator(device='cuda').manual_seed(12345)
+
+    text_encoder.to('cuda')
+    text_encoder_2.to('cuda')
+
+    positive_cond, positive_pooler = pipeline.encode_cropped_prompt_77tokens(
+        prompt
+    )
+
+    negative_cond, negative_pooler = pipeline.encode_cropped_prompt_77tokens(default_negative)
+
+    unet.to('cuda')
+    initial_latent = torch.zeros(size=(1, 4, 144, 112), dtype=unet.dtype, device=unet.device)
+    latents = pipeline(
+        initial_latent=initial_latent,
+        strength=1.0,
+        num_inference_steps=25,
+        batch_size=1,
+        prompt_embeds=positive_cond,
+        negative_prompt_embeds=negative_cond,
+        pooled_prompt_embeds=positive_pooler,
+        negative_pooled_prompt_embeds=negative_pooler,
+        generator=rng,
+        guidance_scale=guidance_scale,
+    ).images
+
+    vae.to('cuda')
+    transparent_decoder.to('cuda')
+    transparent_encoder.to('cuda')
+    latents = latents.to(dtype=vae.dtype, device=vae.device) / vae.config.scaling_factor
+    result_list, vis_list = transparent_decoder(vae, latents)
+
+    for i, image in enumerate(result_list):
+        Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_transparent.png', format='PNG')
+
+    for i, image in enumerate(vis_list):
+        Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_visualization.png', format='PNG')
+
+    clear_cache_print_memory()
+
 
 @app.route('/ping', methods=['GET'])
 def pinging():
     return 'pong'
 
-@app.route('/json-example', methods=['POST'])
+@app.route('/metadata', methods=['POST'])
 def json_example():
     request_data = request.get_json()
 
-    print(request_data)
+    print(request.headers)
 
-    language = None
-    framework = None
-    python_version = None
-    example = None
-    boolean_test = None
-
-    if request_data:
-        if 'language' in request_data:
-            language = request_data['language']
-
-        if 'framework' in request_data:
-            framework = request_data['framework']
-
-        if 'version_info' in request_data:
-            if 'python' in request_data['version_info']:
-                python_version = request_data['version_info']['python']
-
-        if 'examples' in request_data:
-            if (type(request_data['examples']) == list) and (len(request_data['examples']) > 0):
-                example = request_data['examples'][0]
-
-        if 'boolean_test' in request_data:
-            boolean_test = request_data['boolean_test']
     #return a dict to return a JSON by default
     response = make_response({
         "test": "this"
@@ -46,4 +158,4 @@ def json_example():
 
 if __name__ == '__main__':
     # run app in debug mode on port 5000
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=8080)
