@@ -177,6 +177,40 @@ def index():
         return res
     else:
         return "No image"
+    
+@app.route('/check', methods=['GET'])
+def index():
+    b64 = request.args.get("prompt")
+    if(prompt):
+        
+        positive_cond, positive_pooler = pipeline.encode_cropped_prompt_77tokens(
+        prompt
+        )
+
+        negative_cond, negative_pooler = pipeline.encode_cropped_prompt_77tokens(default_negative)
+
+        initial_latent = torch.zeros(size=(1, 4, 144, 112), dtype=unet.dtype, device=unet.device)
+        latents = pipeline(
+            initial_latent=initial_latent,
+            strength=1.0,
+            num_inference_steps=25,
+            batch_size=1,
+            prompt_embeds=positive_cond,
+            negative_prompt_embeds=negative_cond,
+            pooled_prompt_embeds=positive_pooler,
+            negative_pooled_prompt_embeds=negative_pooler,
+            generator=rng,
+            guidance_scale=guidance_scale,
+        ).images
+        latents = latents.to(dtype=vae.dtype, device=vae.device) / vae.config.scaling_factor
+        result_list, vis_list = transparent_decoder(vae, latents)
+        img
+        for i, image in enumerate(result_list):
+            img = Image.fromarray(image)
+        clear_cache_print_memory()
+        return "Generated image"
+    else:
+        return "No prompt"
 
 @app.route('/metadata', methods=['POST'])
 def json_example():
