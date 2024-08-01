@@ -8,7 +8,6 @@ runpod==1.6.0
 opencv-python
 tensorboardX
 safetensors
-modelscope
 pillow
 einops
 torch
