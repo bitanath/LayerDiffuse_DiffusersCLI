@@ -166,6 +166,9 @@ with torch.inference_mode():
     for i, image in enumerate(vis_list):
         Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_visualization.png', format='PNG')
 
+    result = subprocess.run(['nvidia-smi', '--query-gpu=memory.total,memory.free', '--format=csv'], stdout=subprocess.PIPE)
+    print(result.stdout)
+
     print("Now regenerating the image without specifying cuda")
 
     positive_cond, positive_pooler = pipeline.encode_cropped_prompt_77tokens(
@@ -198,6 +201,17 @@ with torch.inference_mode():
 
 
     msgs = [{'role': 'user', 'content': "What does this image contain?"}]
+    default_params = {"stream": False, "sampling": False, "num_beams":3, "repetition_penalty": 1.2, "max_new_tokens": 1024}
+    res = chatgpt_model.chat(
+        image=Image.fromarray(image),
+        msgs=msgs,
+        tokenizer=chatgpt_tokenizer,
+        **default_params
+    )
+
+    print(res)
+
+    msgs = [{'role': 'user', 'content': "Hey how are you doing, I want you to act as a storyteller",'role': 'assistant', 'content': "Sure I can do that.",'role': 'user', 'content': "Write a short story with respect to the image"}]
     default_params = {"stream": False, "sampling": False, "num_beams":3, "repetition_penalty": 1.2, "max_new_tokens": 1024}
     res = chatgpt_model.chat(
         image=Image.fromarray(image),
