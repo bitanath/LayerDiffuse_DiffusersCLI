@@ -122,7 +122,7 @@ guidance_scale=7.0
 
 pipeline.to('cuda')
 
-print("Got prompt",prompt,pipeline.device)
+print("Got prompt",prompt,pipeline.device, unet.device, vae.device)
 # def infer(prompt,negative=default_negative,num_inference_steps=25,guidance_scale=7.0):
 with torch.inference_mode():
     # torch.cuda.empty_cache()
