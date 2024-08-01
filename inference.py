@@ -14,19 +14,21 @@ from lib_layerdiffuse.utils import download_model
 
 sdxl_name = 'SG161222/RealVisXL_V4.0'
 tokenizer = CLIPTokenizer.from_pretrained(
-    sdxl_name, subfolder="tokenizer").cuda()
+    sdxl_name, subfolder="tokenizer")
 tokenizer_2 = CLIPTokenizer.from_pretrained(
-    sdxl_name, subfolder="tokenizer_2").cuda()
+    sdxl_name, subfolder="tokenizer_2")
 text_encoder = CLIPTextModel.from_pretrained(
-    sdxl_name, subfolder="text_encoder", torch_dtype=torch.float16, variant="fp16").cuda()
+    sdxl_name, subfolder="text_encoder", torch_dtype=torch.float16, variant="fp16")
 text_encoder_2 = CLIPTextModel.from_pretrained(
-    sdxl_name, subfolder="text_encoder_2", torch_dtype=torch.float16, variant="fp16").cuda()
+    sdxl_name, subfolder="text_encoder_2", torch_dtype=torch.float16, variant="fp16")
 vae = AutoencoderKL.from_pretrained(
-    sdxl_name, subfolder="vae", torch_dtype=torch.bfloat16, variant="fp16").cuda()  # bfloat16 vae
+    sdxl_name, subfolder="vae", torch_dtype=torch.bfloat16, variant="fp16")  # bfloat16 vae
 unet = UNet2DConditionModel.from_pretrained(
-    sdxl_name, subfolder="unet", torch_dtype=torch.float16, variant="fp16").cuda()
+    sdxl_name, subfolder="unet", torch_dtype=torch.float16, variant="fp16")
 
 default_negative = 'face asymmetry, eyes asymmetry, deformed eyes, open mouth, nsfw'
+
+unet.to('cuda')
 
 @torch.inference_mode()
 def pytorch2numpy(imgs):
