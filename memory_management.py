@@ -2,7 +2,7 @@ import torch
 from contextlib import contextmanager
 
 
-high_vram = False
+high_vram = True
 gpu = torch.device('cuda')
 cpu = torch.device('cpu')
 
