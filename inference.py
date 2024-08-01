@@ -40,7 +40,7 @@ unet = UNet2DConditionModel.from_pretrained(
 # Note that in A111's normalization, a full "(full sentence)" is equal to "full sentence"
 # so we can just remove SG161222's braces
 
-default_negative = 'face asymmetry, eyes asymmetry, deformed eyes, open mouth, nsfw'
+default_negative = 'face asymmetry, eyes asymmetry, deformed eyes, open mouth, nsfw, robot eyes, distorted, bad anatomy, medium quality, blurry, blurred, low resolution'
 
 # SDP
 
@@ -129,7 +129,7 @@ def resize_without_crop(image, target_width, target_height):
     resized_image = pil_image.resize((target_width, target_height), Image.LANCZOS)
     return np.array(resized_image)
 
-prompt = sys.argv[1]
+prompt = sys.argv[1] + ", masterpiece, best quality, absurdres"
 print("Now inferring with prompt ",prompt)
 
 clear_cache_print_memory()
