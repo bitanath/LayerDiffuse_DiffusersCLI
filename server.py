@@ -62,6 +62,7 @@ path_ld_diffusers_sdxl_vae_transparent_decoder = download_model(
 
 ## Warmup the server
 print("Warming up:")
+clear_cache_print_memory()
 
 sd_offset = sf.load_file(path_ld_diffusers_sdxl_attn)
 sd_origin = unet.state_dict()
@@ -169,6 +170,5 @@ def json_example():
     return response
 
 
-if __name__ == '__main__':
-    # run app in debug mode on port 5000
-    app.run(debug=True, port=8080)
+
+app.run(debug=True, port=8080, use_reloader=False)
