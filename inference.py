@@ -11,6 +11,17 @@ from diffusers.models.attention_processor import AttnProcessor2_0
 from transformers import CLIPTextModel, CLIPTokenizer
 from lib_layerdiffuse.vae import TransparentVAEDecoder, TransparentVAEEncoder
 from lib_layerdiffuse.utils import download_model
+from modelscope import AutoModel, AutoTokenizer,snapshot_download
+
+model = AutoModel.from_pretrained('OpenBMB/MiniCPM-V-2.0', trust_remote_code=True, torch_dtype=torch.float16)
+model = model.to(device='cuda', dtype=torch.float16)
+tokenizer = AutoTokenizer.from_pretrained('OpenBMB/MiniCPM-V-2.0', trust_remote_code=True)
+model.eval()
+
+chatgpt_model_dir = snapshot_download('OpenBMB/MiniCPM-Llama3-V-2_5')
+chatgpt_model = AutoModel.from_pretrained(chatgpt_model_dir, trust_remote_code=True)
+tokenizer = AutoTokenizer.from_pretrained(chatgpt_model_dir, trust_remote_code=True)
+chatgpt_model.eval()
 
 
 # Load models
@@ -114,7 +125,7 @@ def resize_without_crop(image, target_width, target_height):
     return np.array(resized_image)
 
 prompt = sys.argv[1]
-
+print("Now inferring with prompt ",prompt)
 with torch.inference_mode():
     guidance_scale = 7.0
 
@@ -155,3 +166,15 @@ with torch.inference_mode():
 
     for i, image in enumerate(vis_list):
         Image.fromarray(image).save(f'./imgs/outputs/t2i_{i}_visualization.png', format='PNG')
+
+    msgs = [{'role': 'user', 'content': "What does this image contain?"}]
+
+    res = chatgpt_model.chat(
+        image=Image.fromarray(image),
+        msgs=msgs,
+        tokenizer=tokenizer,
+        sampling=True,
+        temperature=0.7
+    )
+    print(res)
+    
