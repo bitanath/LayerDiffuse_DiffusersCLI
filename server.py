@@ -180,7 +180,7 @@ def index():
         return "No image"
     
 @app.route('/check', methods=['GET'])
-def index():
+def check():
     prompt = request.args.get("prompt")
     if(prompt):
         prompt = prompt + default_keywords
