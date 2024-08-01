@@ -48,9 +48,10 @@ class Net(nn.Module):
         self.hooked['output'] = outputs
 
 
-def heatmap(img):
+def heatmap(im):
+    img = im.convert("RGB")
     model = Net().to('cuda')
-    heatmap = model(T.ToTensor()(img.convert("RGB")).to('cuda')).cpu().detach().numpy().transpose(1, 2, 0).astype("uint8")
+    heatmap = model(T.ToTensor()(img).to('cuda')).cpu().detach().numpy().transpose(1, 2, 0).astype("uint8")
     im_pred = ImageOps.invert(Image.fromarray(heatmap.squeeze(),"L").resize(img.size))
     overlaid = overlay(heatmap,img)
     return overlaid

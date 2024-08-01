@@ -5,6 +5,7 @@ import safetensors.torch as sf
 import subprocess
 
 from functions import print_memory,clear_cache_print_memory,clear_cache,pytorch2numpy,numpy2pytorch,resize_without_crop
+from chat import interrogate_type,interrogate_good,interrogate_bad,interrogate_spelling_grammar,interrogate_colors,interrogate_complementary,interrogate_add_item,interrogate_canva_add
 
 from PIL import Image
 from diffusers_kdiffusion_sdxl import KDiffusionStableDiffusionXLPipeline
@@ -151,10 +152,14 @@ with torch.inference_mode():
 def pinging():
     return 'pong'
 
+@app.route('/', methods=['GET'])
+def index():
+    return 'index'
+
 @app.route('/metadata', methods=['POST'])
 def json_example():
-    request_data = request.get_json() #get the thumbnail image of the design here
-    print(request.headers)
+    request_data = request.get_json() #TODO get the base64 encoded thumbnail image of the design here
+    request_headers = request.headers #TODO check the headers for requisite identification
 
     #return a dict to return a JSON by default
     response = make_response({
